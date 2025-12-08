@@ -12,7 +12,6 @@ app.use(cors());
 app.use(express.json());
 const uri = `mongodb+srv://${process.env.ADMIN_NAME}:${process.env.ADMIN_PASS}@cluster0.egeojdc.mongodb.net/?appName=Cluster0`;
 
-
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -75,7 +74,7 @@ async function run() {
       res.status(500).send({ message: "Login failed" });
     }
   });
-  
+
   // add google user to DB
   app.post("/users/google", async (req, res) => {
     try {
@@ -121,29 +120,60 @@ async function run() {
     }
   });
 
+  app.get('/users', async(req,res)=>{
+    
+  })
+
   // payment related apis
   app.post("/create-checkout-session", async (req, res) => {
     const paymentInfo = req.body;
+    const amount = Math.floor(11.801 * 100);
+
     const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
       line_items: [
         {
           price_data: {
             currency: "usd",
-            unit_amount: 12.27 * 100,
+            unit_amount: amount,
             product_data: {
               name: "Premium Plan",
+              description: "Access to Premium Lessons on Life Lessons Platform",
             },
           },
           quantity: 1,
         },
       ],
-      customer_email: paymentInfo.userEmail,
       mode: "payment",
-      success_url: `${process.env.SITE_DOMAIN}/dashboard/paymentSuccess`,
+      customer_email: paymentInfo.userEmail,
+      metadata: {
+        userId: paymentInfo.userId,
+        plan: "Premium",
+      },
+      success_url: `${process.env.SITE_DOMAIN}/dashboard/paymentSuccess?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.SITE_DOMAIN}/dashboard/paymentCancel`,
     });
 
     res.json({ url: session.url });
+  });
+
+  app.get("/payment-success", async (req, res) => {
+    const sessionId = req.query.session_id;
+
+    try {
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      const paymentData = {
+        userEmail: session.customer_email,
+        amount: session.amount_total / 100, 
+        plan: session.metadata.plan,
+        transactionId: session.payment_intent,
+      };
+
+      res.json(paymentData); 
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Unable to retrieve session" });
+    }
   });
 }
 run();
