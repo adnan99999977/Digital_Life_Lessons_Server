@@ -75,6 +75,7 @@ async function run() {
       res.status(500).send({ message: "Login failed" });
     }
   });
+  
   // add google user to DB
   app.post("/users/google", async (req, res) => {
     try {
@@ -96,6 +97,7 @@ async function run() {
       res.status(500).send({ message: "Google user save failed" });
     }
   });
+
   // existing user check
   app.get("/users", async (req, res) => {
     const { email } = req.body;
@@ -106,6 +108,7 @@ async function run() {
     const result = await usersCollection.insertOne(req.body);
     res.send(result);
   });
+
   // add lessons
   app.post("/lessons", async (req, res) => {
     try {
