@@ -2,7 +2,6 @@ require("dotenv").config();
 const bcrypt = require("bcrypt");
 const express = require("express");
 const cors = require("cors");
-
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const stripe = require("stripe")(process.env.PAYMENT_SECRET);
 
