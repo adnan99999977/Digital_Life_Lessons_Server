@@ -10,8 +10,8 @@ const port = 3000;
 
 app.use(cors());
 app.use(express.json());
-
 const uri = `mongodb+srv://${process.env.ADMIN_NAME}:${process.env.ADMIN_PASS}@cluster0.egeojdc.mongodb.net/?appName=Cluster0`;
+
 
 const client = new MongoClient(uri, {
   serverApi: {
@@ -20,6 +20,7 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   },
 });
+
 const db = client.db("digitalLifeLessons");
 const usersCollection = db.collection("users");
 const lessonsCollection = db.collection("lessons");
