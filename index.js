@@ -56,6 +56,7 @@ async function run() {
   } catch (error) {
     console.error(error);
   }
+// USERS API'S
 
   // check bcrypt password while login
   app.post("/login", async (req, res) => {
@@ -97,6 +98,34 @@ async function run() {
     }
   });
 
+  // get user by email 
+   
+app.get("/users", async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) return res.status(400).send({ message: "Email is required" });
+    
+    const user = await usersCollection.findOne({ email });
+    if (!user) return res.status(404).send({ message: "User not found" });
+
+    res.send(user);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ message: "Failed to fetch user" });
+  }
+});
+
+  // get all users
+  app.get("/users", async (req, res) => {
+    try {
+      const result = await usersCollection.find().toArray();
+      res.send(result);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
   // existing user check
   app.get("/users", async (req, res) => {
     const { email } = req.body;
@@ -107,6 +136,8 @@ async function run() {
     const result = await usersCollection.insertOne(req.body);
     res.send(result);
   });
+
+// LESSONS API'S
 
   // add lessons
   app.post("/lessons", async (req, res) => {
@@ -120,11 +151,18 @@ async function run() {
     }
   });
 
-  app.get('/users', async(req,res)=>{
-    
-  })
+   // get all lessons
+  app.get("/lessons", async (req, res) => {
+    try {
+      const result = await lessonsCollection.find().toArray();
+      res.send(result);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch lessons" });
+    }
+  });
 
-  // payment related apis
+  // ******payment related apis
   app.post("/create-checkout-session", async (req, res) => {
     const paymentInfo = req.body;
     const amount = Math.floor(11.801 * 100);
@@ -162,14 +200,22 @@ async function run() {
 
     try {
       const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+      const userEmail = session.customer_email;
+
       const paymentData = {
         userEmail: session.customer_email,
-        amount: session.amount_total / 100, 
+        amount: session.amount_total / 100,
         plan: session.metadata.plan,
         transactionId: session.payment_intent,
       };
 
-      res.json(paymentData); 
+      await usersCollection.updateOne(
+        { email: userEmail },
+        { $set: { plan: "Premium", isPremium: true } }
+      );
+
+      res.json(paymentData);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Unable to retrieve session" });
