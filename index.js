@@ -2,7 +2,7 @@ require("dotenv").config();
 const bcrypt = require("bcrypt");
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const stripe = require("stripe")(process.env.PAYMENT_SECRET);
 
 const app = express();
@@ -56,7 +56,7 @@ async function run() {
   } catch (error) {
     console.error(error);
   }
-// USERS API'S
+  // USERS API'S
 
   // check bcrypt password while login
   app.post("/login", async (req, res) => {
@@ -98,31 +98,24 @@ async function run() {
     }
   });
 
-  // get user by email 
-   
-app.get("/users", async (req, res) => {
-  try {
-    const { email } = req.query;
-    if (!email) return res.status(400).send({ message: "Email is required" });
-    
-    const user = await usersCollection.findOne({ email });
-    if (!user) return res.status(404).send({ message: "User not found" });
-
-    res.send(user);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send({ message: "Failed to fetch user" });
-  }
-});
-
-  // get all users
+  // Get user(s)
   app.get("/users", async (req, res) => {
     try {
-      const result = await usersCollection.find().toArray();
-      res.send(result);
+      const { email } = req.query;
+
+      if (email) {
+        // Fetch single user by email
+        const user = await usersCollection.findOne({ email });
+        if (!user) return res.status(404).send({ message: "User not found" });
+        return res.send(user);
+      }
+
+      // If no email, fetch all users
+      const users = await usersCollection.find().toArray();
+      res.send(users);
     } catch (err) {
       console.error(err);
-      res.status(500).json({ message: "Failed to fetch users" });
+      res.status(500).send({ message: "Failed to fetch user(s)" });
     }
   });
 
@@ -137,7 +130,7 @@ app.get("/users", async (req, res) => {
     res.send(result);
   });
 
-// LESSONS API'S
+  // LESSONS API'S
 
   // add lessons
   app.post("/lessons", async (req, res) => {
@@ -151,7 +144,7 @@ app.get("/users", async (req, res) => {
     }
   });
 
-   // get all lessons
+  // get all lessons
   app.get("/lessons", async (req, res) => {
     try {
       const result = await lessonsCollection.find().toArray();
@@ -160,6 +153,14 @@ app.get("/users", async (req, res) => {
       console.error(err);
       res.status(500).json({ message: "Failed to fetch lessons" });
     }
+  });
+  // get lesson by id
+  app.get("/lessons/:id", async (req, res) => {
+    const { id } = req.params;
+    const lesson = await lessonsCollection.findOne({
+      _id: new ObjectId(id),
+    });
+    res.send(lesson);
   });
 
   // ******payment related apis
@@ -197,25 +198,24 @@ app.get("/users", async (req, res) => {
 
   app.get("/payment-success", async (req, res) => {
     const sessionId = req.query.session_id;
-
     try {
       const session = await stripe.checkout.sessions.retrieve(sessionId);
-
       const userEmail = session.customer_email;
 
-      const paymentData = {
-        userEmail: session.customer_email,
-        amount: session.amount_total / 100,
-        plan: session.metadata.plan,
-        transactionId: session.payment_intent,
-      };
-
-      await usersCollection.updateOne(
+      const result = await usersCollection.findOneAndUpdate(
         { email: userEmail },
-        { $set: { plan: "Premium", isPremium: true } }
+        { $set: { plan: "Premium", isPremium: true } },
+        { returnDocument: "after" }
       );
 
-      res.json(paymentData);
+      res.json({
+        message: "Payment successful, user upgraded",
+        user: result.value,
+        amount: session.amount_total / 100,
+        plan: "Premium",
+        transactionId: session.payment_intent,
+        userEmail: userEmail,
+      });
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Unable to retrieve session" });
