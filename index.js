@@ -131,6 +131,8 @@ async function run() {
     res.send(result);
   });
 
+  // =================================================
+
   // LESSONS API'S
 
   // add lessons
@@ -207,10 +209,10 @@ async function run() {
     }
   });
 
+  // =================================================
   // COMMENTS APIS
 
   // post comment
-
   app.post("/comments", async (req, res) => {
     try {
       const data = req.body;
@@ -234,7 +236,33 @@ async function run() {
     }
   });
 
+  // =================================================
+  // FAVORITE APIs
+  app.post("/favorites", async (req, res) => {
+    try {
+      const data = req.body;
+      const result = await favoritesCollection.insertOne(data);
+      res.status(201).send(result);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send({ message: "Failed to add favorites" });
+    }
+  });
+
+  app.get("/favorites", async (req, res) => {
+    try {
+      const data = req.body;
+      const favorites = await favoritesCollection.find(data).toArray();
+      res.status(201).send(favorites);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send({ message: "Failed to get favorites" });
+    }
+  });
+
+  // =================================================
   // PAYMENTS APIS
+
   app.post("/create-checkout-session", async (req, res) => {
     const paymentInfo = req.body;
     const amount = Math.floor(11.801 * 100);
