@@ -56,6 +56,7 @@ async function run() {
   } catch (error) {
     console.error(error);
   }
+
   // USERS API'S
 
   // check bcrypt password while login
@@ -147,13 +148,22 @@ async function run() {
   // get all lessons
   app.get("/lessons", async (req, res) => {
     try {
-      const result = await lessonsCollection.find().toArray();
-      res.send(result);
+      const { email } = req.query;
+
+      let query = {};
+
+      if (email) {
+        query = { creatorEmail: email };
+      }
+
+      const lessons = await lessonsCollection.find(query).toArray();
+      res.send(lessons);
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Failed to fetch lessons" });
     }
   });
+
   // get lesson by id
   app.get("/lessons/:id", async (req, res) => {
     const { id } = req.params;
@@ -162,8 +172,69 @@ async function run() {
     });
     res.send(lesson);
   });
+  // get lesson by /lessons/featured
+  app.get("/lessons/featured", async (req, res) => {
+    try {
+      const lessons = await Lesson.find({ featured: true });
+      res.status(200).json(lessons);
+    } catch (err) {
+      console.error("Failed to get featured lessons:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
 
-  // ******payment related apis
+  // get lesson by top-contributors
+  app.get("/users/top-contributors", async (req, res) => {
+    try {
+      // Example: get top 4 users by lessons contributed
+      const contributors = await User.find()
+        .sort({ lessonsContributed: -1 })
+        .limit(4);
+      res.status(200).json(contributors);
+    } catch (err) {
+      console.error("Failed to get top contributors:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+  // get lesson by most-saved
+  app.get("/lessons/most-saved", async (req, res) => {
+    try {
+      const lessons = await Lesson.find().sort({ savedCount: -1 }).limit(6);
+      res.status(200).json(lessons);
+    } catch (err) {
+      console.error("Failed to get most saved lessons:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // COMMENTS APIS
+
+  // post comment
+
+  app.post("/comments", async (req, res) => {
+    try {
+      const data = req.body;
+      const result = await commentsCollection.insertOne(data);
+      res.status(201).send(result);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send({ message: "Failed to add comment" });
+    }
+  });
+
+  // get comment
+  app.get("/comments", async (req, res) => {
+    try {
+      const data = req.body;
+      const comments = await commentsCollection.find(data).toArray();
+      res.status(201).send(comments);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send({ message: "Failed to get comments" });
+    }
+  });
+
+  // PAYMENTS APIS
   app.post("/create-checkout-session", async (req, res) => {
     const paymentInfo = req.body;
     const amount = Math.floor(11.801 * 100);
