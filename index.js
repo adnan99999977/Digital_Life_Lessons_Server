@@ -205,6 +205,48 @@ async function run() {
     }
   });
 
+  app.patch("/lessons/:id/like", async (req, res) => {
+    const { id } = req.params;
+    try {
+      const result = await lessonsCollection.findOneAndUpdate(
+        { _id: new ObjectId(id) },
+        { $inc: { likesCount: 1 } },
+        { returnDocument: "after" }
+      );
+      res.status(200).send(result.value);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send({ message: "Failed to like" });
+    }
+  });
+
+  app.delete("/lessons/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const result = await lessonsCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+
+      if (result.deletedCount === 1) {
+        return res.status(200).send({
+          success: true,
+          message: "lessons item deleted successfully",
+        });
+      }
+      res.status(404).send({
+        success: false,
+        message: "lessons item not found",
+      });
+    } catch (err) {
+      console.error("Delete lessons error:", err);
+      res.status(500).send({
+        success: false,
+        message: "Failed to delete lessons item",
+      });
+    }
+  });
+
   // =================================================
   // COMMENTS APIS
 
@@ -221,9 +263,12 @@ async function run() {
 
   app.get("/comments", async (req, res) => {
     try {
-      const data = req.body;
-      const comments = await commentsCollection.find(data).toArray();
-      res.status(201).send(comments);
+      const { lessonId } = req.query; // Get lessonId from URL query
+      if (!lessonId)
+        return res.status(400).send({ message: "lessonId is required" });
+
+      const comments = await commentsCollection.find({ lessonId }).toArray();
+      res.status(200).send(comments); // ✅ Only comments for this lesson
     } catch (err) {
       console.error(err);
       res.status(500).send({ message: "Failed to get comments" });
@@ -278,6 +323,30 @@ async function run() {
         success: false,
         message: "Failed to delete favorite item",
       });
+    }
+  });
+
+  // =================================================
+  //  REPORTED APIS
+  app.post("lessonsReports", async (req, res) => {
+    try {
+      const data = req.body;
+      const result = await lessonsReportsCollection.insertOne(data);
+      res.status(201).send(result);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send({ message: "Failed to report" });
+    }
+  });
+
+  app.get("/lessonsReports", async (req, res) => {
+    try {
+      const data = req.body;
+      const favorites = await lessonsReportsCollection.find(data).toArray();
+      res.status(201).send(favorites);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send({ message: "Failed to get Reports data" });
     }
   });
 
