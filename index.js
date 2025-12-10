@@ -135,7 +135,6 @@ async function run() {
 
   // LESSONS API'S
 
-  // add lessons
   app.post("/lessons", async (req, res) => {
     try {
       const data = req.body;
@@ -147,7 +146,6 @@ async function run() {
     }
   });
 
-  // get all lessons
   app.get("/lessons", async (req, res) => {
     try {
       const { email } = req.query;
@@ -166,7 +164,6 @@ async function run() {
     }
   });
 
-  // get lesson by id
   app.get("/lessons/:id", async (req, res) => {
     const { id } = req.params;
     const lesson = await lessonsCollection.findOne({
@@ -174,7 +171,7 @@ async function run() {
     });
     res.send(lesson);
   });
-  // get lesson by /lessons/featured
+
   app.get("/lessons/featured", async (req, res) => {
     try {
       const lessons = await Lesson.find({ featured: true });
@@ -185,7 +182,6 @@ async function run() {
     }
   });
 
-  // get lesson by top-contributors
   app.get("/users/top-contributors", async (req, res) => {
     try {
       // Example: get top 4 users by lessons contributed
@@ -198,7 +194,7 @@ async function run() {
       res.status(500).json({ message: "Internal server error" });
     }
   });
-  // get lesson by most-saved
+
   app.get("/lessons/most-saved", async (req, res) => {
     try {
       const lessons = await Lesson.find().sort({ savedCount: -1 }).limit(6);
@@ -212,7 +208,6 @@ async function run() {
   // =================================================
   // COMMENTS APIS
 
-  // post comment
   app.post("/comments", async (req, res) => {
     try {
       const data = req.body;
@@ -224,7 +219,6 @@ async function run() {
     }
   });
 
-  // get comment
   app.get("/comments", async (req, res) => {
     try {
       const data = req.body;
@@ -257,6 +251,33 @@ async function run() {
     } catch (err) {
       console.error(err);
       res.status(500).send({ message: "Failed to get favorites" });
+    }
+  });
+
+  app.delete("/favorites/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const result = await favoritesCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+
+      if (result.deletedCount === 1) {
+        return res.status(200).send({
+          success: true,
+          message: "Favorite item deleted successfully",
+        });
+      }
+      res.status(404).send({
+        success: false,
+        message: "Favorite item not found",
+      });
+    } catch (err) {
+      console.error("Delete favorite error:", err);
+      res.status(500).send({
+        success: false,
+        message: "Failed to delete favorite item",
+      });
     }
   });
 
