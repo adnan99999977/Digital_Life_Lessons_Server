@@ -9,7 +9,9 @@ const app = express();
 const port = 3000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "15mb" }));
+app.use(express.urlencoded({ limit: "15mb", extended: true }));
+
 const uri = `mongodb+srv://${process.env.ADMIN_NAME}:${process.env.ADMIN_PASS}@cluster0.egeojdc.mongodb.net/?appName=Cluster0`;
 
 const client = new MongoClient(uri, {
@@ -77,7 +79,6 @@ async function run() {
     }
   });
 
-  // add google user to DB
   app.post("/users/google", async (req, res) => {
     try {
       const { email } = req.body;
@@ -98,8 +99,6 @@ async function run() {
       res.status(500).send({ message: "Google user save failed" });
     }
   });
-
-  // Get user(s)
   app.get("/users", async (req, res) => {
     try {
       const { email } = req.query;
@@ -119,8 +118,6 @@ async function run() {
       res.status(500).send({ message: "Failed to fetch user(s)" });
     }
   });
-
-  // existing user check
   app.get("/users", async (req, res) => {
     const { email } = req.body;
     const existingEmail = usersCollection.findOne({ email });
@@ -129,6 +126,26 @@ async function run() {
     }
     const result = await usersCollection.insertOne(req.body);
     res.send(result);
+  });
+
+  app.patch("/users/:id", async (req, res) => {
+    const userId = req.params.id;
+    const updateData = req.body;
+
+    const result = await usersCollection.updateOne(
+      { _id: new ObjectId(userId) },
+      { $set: updateData }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).send({ message: "User not found" });
+    }
+
+    const updatedUser = await usersCollection.findOne({
+      _id: new ObjectId(userId),
+    });
+
+    res.send(updatedUser);
   });
 
   // =================================================
@@ -328,7 +345,7 @@ async function run() {
 
   // =================================================
   //  REPORTED APIS
-  app.post("lessonsReports", async (req, res) => {
+  app.post("/lessonsReports", async (req, res) => {
     try {
       const data = req.body;
       const result = await lessonsReportsCollection.insertOne(data);
