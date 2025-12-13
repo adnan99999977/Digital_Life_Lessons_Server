@@ -26,7 +26,6 @@ const db = client.db("digitalLifeLessons");
 const usersCollection = db.collection("users");
 const lessonsCollection = db.collection("lessons");
 const lessonsReportsCollection = db.collection("lessonsReports");
-const paymentsCollection = db.collection("payments");
 const favoritesCollection = db.collection("favorites");
 const commentsCollection = db.collection("comments");
 
@@ -99,33 +98,82 @@ async function run() {
       res.status(500).send({ message: "Google user save failed" });
     }
   });
+
+  app.get("/users/:id", async (req, res) => {
+    const { id } = req.params;
+
+    try {
+      const user = await usersCollection.findOne({ _id: new ObjectId(id) });
+      if (!user) return res.status(404).send({ message: "User not found" });
+
+      res.send(user);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send({ message: "Failed to fetch user" });
+    }
+  });
+
   app.get("/users", async (req, res) => {
     try {
       const { email } = req.query;
 
+      // single user by email
       if (email) {
-        // Fetch single user by email
         const user = await usersCollection.findOne({ email });
-        if (!user) return res.status(404).send({ message: "User not found" });
+        if (!user) {
+          return res.status(404).send({ message: "User not found" });
+        }
         return res.send(user);
       }
 
-      // If no email, fetch all users
+      // all users
       const users = await usersCollection.find().toArray();
       res.send(users);
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error(error);
       res.status(500).send({ message: "Failed to fetch user(s)" });
     }
   });
-  app.get("/users", async (req, res) => {
-    const { email } = req.body;
-    const existingEmail = usersCollection.findOne({ email });
-    if (existingEmail) {
-      return res.send({ message: "User already exists" });
+
+  app.post("/users", async (req, res) => {
+    try {
+      const user = req.body;
+
+      if (!user?.email) {
+        return res.status(400).send({ message: "Email is required" });
+      }
+
+      const existingUser = await usersCollection.findOne({
+        email: user.email,
+      });
+
+      if (existingUser) {
+        return res.send({ message: "User already exists", inserted: false });
+      }
+
+      const result = await usersCollection.insertOne(user);
+      res.status(201).send({
+        message: "User created successfully",
+        inserted: true,
+        result,
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).send({ message: "Failed to create user" });
     }
-    const result = await usersCollection.insertOne(req.body);
-    res.send(result);
+  });
+
+  app.get("/users/top-contributors", async (req, res) => {
+    try {
+      // Example: get top 4 users by lessons contributed
+      const contributors = await User.find()
+        .sort({ lessonsContributed: -1 })
+        .limit(4);
+      res.status(200).json(contributors);
+    } catch (err) {
+      console.error("Failed to get top contributors:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
   });
 
   app.patch("/users/:id", async (req, res) => {
@@ -148,6 +196,32 @@ async function run() {
     res.send(updatedUser);
   });
 
+  app.delete("/users/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const result = await usersCollection.deleteOne({ _id: new ObjectId(id) });
+
+      if (result.deletedCount === 1) {
+        return res.status(200).send({
+          success: true,
+          message: "User deleted successfully",
+        });
+      }
+
+      res.status(404).send({
+        success: false,
+        message: "User not found",
+      });
+    } catch (err) {
+      console.error("Delete user error:", err);
+      res.status(500).send({
+        success: false,
+        message: "Failed to delete user",
+      });
+    }
+  });
+
   // =================================================
 
   // LESSONS API'S
@@ -160,6 +234,37 @@ async function run() {
     } catch (err) {
       console.error(err);
       res.status(500).send({ message: "Failed to add lesson" });
+    }
+  });
+
+  app.patch("/lessons/:id", async (req, res) => {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    try {
+      if (!ObjectId.isValid(id))
+        return res.status(400).send({ message: "Invalid lesson ID" });
+
+      const lesson = await lessonsCollection.findOne({ _id: new ObjectId(id) });
+      if (!lesson) return res.status(404).send({ message: "Lesson not found" });
+
+      // Update
+      await lessonsCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: updateData }
+      );
+
+      // Fetch updated lesson
+      const updatedLesson = await lessonsCollection.findOne({
+        _id: new ObjectId(id),
+      });
+
+      res.status(200).send(updatedLesson); // ✅ now defined
+    } catch (err) {
+      console.error("Update lesson error:", err);
+      res
+        .status(500)
+        .send({ message: "Failed to update lesson", error: err.message });
     }
   });
 
@@ -199,19 +304,6 @@ async function run() {
     }
   });
 
-  app.get("/users/top-contributors", async (req, res) => {
-    try {
-      // Example: get top 4 users by lessons contributed
-      const contributors = await User.find()
-        .sort({ lessonsContributed: -1 })
-        .limit(4);
-      res.status(200).json(contributors);
-    } catch (err) {
-      console.error("Failed to get top contributors:", err);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
   app.get("/lessons/most-saved", async (req, res) => {
     try {
       const lessons = await Lesson.find().sort({ savedCount: -1 }).limit(6);
@@ -219,6 +311,20 @@ async function run() {
     } catch (err) {
       console.error("Failed to get most saved lessons:", err);
       res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/lessons/:id/favorite", async (req, res) => {
+    const { id } = req.params;
+    try {
+      const result = await lessonsCollection.findOneAndUpdate(
+        { _id: new ObjectId(id) },
+        { $inc: { favoritesCount: 1 } },
+        { returnDocument: "after" } // ensures updated lesson is returned
+      );
+      res.status(200).send(result.value);
+    } catch (err) {
+      res.status(500).send({ message: "Failed to favorite" });
     }
   });
 
@@ -232,8 +338,71 @@ async function run() {
       );
       res.status(200).send(result.value);
     } catch (err) {
-      console.error(err);
       res.status(500).send({ message: "Failed to like" });
+    }
+  });
+
+  // Toggle visibility
+  app.patch("/lessons/:id/toggle-visibility", async (req, res) => {
+    const id = req.params.id;
+    try {
+      if (!ObjectId.isValid(id))
+        return res.status(400).send({ message: "Invalid ID" });
+
+      const lesson = await lessonsCollection.findOne({ _id: new ObjectId(id) });
+      if (!lesson) return res.status(404).send({ message: "Lesson not found" });
+
+      const currentVisibility =
+        (lesson.visibility || "Public") === "Public" ? "Private" : "Public";
+
+      const result = await lessonsCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { visibility: currentVisibility } }
+      );
+
+      res.send(result);
+    } catch (err) {
+      console.error("Toggle visibility error:", err);
+      res.status(500).send({ message: "Server error", error: err.message });
+    }
+  });
+
+  // Toggle access
+  app.patch("/lessons/:id/toggle-access", async (req, res) => {
+    const id = req.params.id;
+    try {
+      if (!ObjectId.isValid(id))
+        return res.status(400).send({ message: "Invalid ID" });
+
+      const lesson = await lessonsCollection.findOne({ _id: new ObjectId(id) });
+      if (!lesson) return res.status(404).send({ message: "Lesson not found" });
+
+      const newAccess =
+        (lesson.accessLevel || "Free") === "Free" ? "Premium" : "Free";
+
+      const result = await lessonsCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { accessLevel: newAccess } }
+      );
+
+      res.send(result);
+    } catch (err) {
+      console.error("Toggle access error:", err);
+      res.status(500).send({ message: "Server error", error: err.message });
+    }
+  });
+
+  app.patch("/lessons/:id/view", async (req, res) => {
+    const { id } = req.params;
+    try {
+      const result = await lessonsCollection.findOneAndUpdate(
+        { _id: new ObjectId(id) },
+        { $inc: { viewsCount: 1 } },
+        { returnDocument: "after" }
+      );
+      res.status(200).send(result.value);
+    } catch (err) {
+      res.status(500).send({ message: "Failed to increment views" });
     }
   });
 
@@ -345,11 +514,23 @@ async function run() {
 
   // =================================================
   //  REPORTED APIS
+  // ==================== REPORTED LESSONS APIs ====================
   app.post("/lessonsReports", async (req, res) => {
     try {
       const data = req.body;
+
+      // 1. Insert report
       const result = await lessonsReportsCollection.insertOne(data);
-      res.status(201).send(result);
+
+      // 2. Increment reportCount in lessons collection
+      const updateResult = await lessonsCollection.updateOne(
+        { _id: new ObjectId(data.lessonId) }, // make sure lessonId is ObjectId
+        { $inc: { reportsCount: 1 } } // increment by 1
+      );
+
+      res
+        .status(201)
+        .send({ reportResult: result, lessonUpdate: updateResult });
     } catch (err) {
       console.error(err);
       res.status(500).send({ message: "Failed to report" });
@@ -358,12 +539,37 @@ async function run() {
 
   app.get("/lessonsReports", async (req, res) => {
     try {
-      const data = req.body;
-      const favorites = await lessonsReportsCollection.find(data).toArray();
-      res.status(201).send(favorites);
+      // GET all reports
+      const reports = await lessonsReportsCollection.find({}).toArray();
+
+      // Map to include count of reasons
+      const formattedReports = reports.map((r) => ({
+        lessonId: r.lessonId,
+        title: r.title,
+        reasons: r.reasons || [],
+        count: r.reasons ? r.reasons.length : 0,
+      }));
+
+      res.status(200).send(formattedReports);
     } catch (err) {
       console.error(err);
-      res.status(500).send({ message: "Failed to get Reports data" });
+      res.status(500).send({ message: "Failed to get reports" });
+    }
+  });
+
+  // Ignore report for a lesson
+  app.patch("/lessonsReports/:lessonId/ignore", async (req, res) => {
+    try {
+      const { lessonId } = req.params;
+      const result = await lessonsReportsCollection.updateOne(
+        { lessonId },
+        { $set: { reasons: [] } }
+      );
+
+      res.status(200).send({ message: "Reports ignored successfully" });
+    } catch (err) {
+      console.error(err);
+      res.status(500).send({ message: "Failed to ignore reports" });
     }
   });
 
